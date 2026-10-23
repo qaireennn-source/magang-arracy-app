@@ -1,0 +1,6 @@
+{
+  "name": "MagiSMA — Sistem Informasi Magang Siswa SMA",
+  "description": "Platform modern dan ramah pelajar untuk siswa SMA mencari informasi magang, mendaftar program magang, dan memantau perkembangan proses magang.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
