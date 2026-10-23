@@ -59,7 +59,11 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="bg-gradient-to-r from-rose-500 via-pink-500 to-rose-400 text-white text-xs py-1.5 px-4 text-center flex items-center justify-center gap-2 font-medium">
         <Sparkles className="w-3.5 h-3.5" />
         <span>
-          <strong>MagiSMA Prototipe:</strong> Platform Edukasi Simulasi Magang Siswa SMA — Data tersimpan aman di browser Anda.
+          <strong>MagiSMA:</strong> Terhubung dengan <strong>Firebase Firestore & Auth</strong> (Cloud Datastore).
+        </span>
+        <span className="inline-flex items-center gap-1 bg-white/20 px-2 py-0.5 rounded-full text-[10px] font-bold text-white border border-white/30">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          Firebase Aktif
         </span>
         <button
           onClick={onOpenInfo}

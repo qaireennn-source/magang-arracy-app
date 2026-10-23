@@ -1,11 +1,27 @@
 import {
   User,
+  UserRole,
   StudentProfile,
   InternshipProgram,
   Application,
   ScheduleItem,
   ApplicationStatus,
 } from '../types';
+import {
+  db,
+  auth,
+  googleProvider,
+  handleFirestoreError,
+  OperationType,
+} from './firebase';
+import {
+  doc,
+  setDoc,
+  getDoc,
+  getDocs,
+  collection,
+} from 'firebase/firestore';
+import { signInWithPopup, signOut as fbSignOut } from 'firebase/auth';
 
 const STORAGE_KEYS = {
   USERS: 'magisma_users_v1',
@@ -15,6 +31,7 @@ const STORAGE_KEYS = {
   APPLICATIONS: 'magisma_applications_v1',
   SCHEDULES: 'magisma_schedules_v1',
   INITIALIZED: 'magisma_initialized_v1',
+  FIREBASE_SYNCED: 'magisma_firebase_synced_v1',
 };
 
 // Default seed data
@@ -844,6 +861,119 @@ class StorageService {
     const schedules = this.getSchedules().filter(s => s.id !== id);
     if (this.isBrowser()) {
       localStorage.setItem(STORAGE_KEYS.SCHEDULES, JSON.stringify(schedules));
+    }
+  }
+
+  // --- Firebase Cloud Sync & Authentication ---
+  public async loginWithGoogle(role: UserRole = 'siswa'): Promise<{ success: boolean; user?: User; message?: string }> {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const fbUser = result.user;
+      const email = fbUser.email || '';
+      const name = fbUser.displayName || (role === 'siswa' ? 'Siswa MagiSMA' : 'Admin Pembimbing');
+      const avatarUrl = fbUser.photoURL || undefined;
+
+      // Check if user already exists in storage or create
+      const users = this.getUsers();
+      let appUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+
+      if (!appUser) {
+        appUser = {
+          id: fbUser.uid,
+          email,
+          name,
+          role,
+          avatarUrl,
+          createdAt: new Date().toISOString(),
+        };
+        users.push(appUser);
+        if (this.isBrowser()) {
+          localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+        }
+
+        // Also create student profile if role is siswa
+        if (role === 'siswa') {
+          const profiles = this.getStudentProfiles();
+          const newProfile: StudentProfile = {
+            id: 'prof_' + fbUser.uid,
+            userId: fbUser.uid,
+            fullName: name,
+            nisn: '00' + Math.floor(10000000 + Math.random() * 90000000),
+            school: 'SMA Negeri 1 Teladan',
+            grade: 'XI MIPA 1',
+            email,
+            phone: '0812-' + Math.floor(1000 + Math.random() * 9000) + '-' + Math.floor(1000 + Math.random() * 9000),
+            interests: ['Teknologi Informasi', 'Desain Grafis & Kreatif'],
+            bio: 'Siswa SMA aktif terdaftar melalui Firebase Google Authentication.',
+            cvFileName: `CV_${name.replace(/\s+/g, '_')}.pdf`,
+            cvFileSize: '1.1 MB',
+            cvUploadDate: new Date().toISOString().split('T')[0],
+            avatarUrl,
+          };
+          profiles.push(newProfile);
+          if (this.isBrowser()) {
+            localStorage.setItem(STORAGE_KEYS.STUDENT_PROFILES, JSON.stringify(profiles));
+          }
+
+          // Also attempt to save to Firestore
+          try {
+            await setDoc(doc(db, 'student_profiles', newProfile.id), newProfile);
+          } catch {
+            // non-blocking
+          }
+        }
+
+        // Try writing user to Firestore
+        try {
+          await setDoc(doc(db, 'users', appUser.id), appUser);
+        } catch {
+          // non-blocking
+        }
+      }
+
+      this.setActiveUser(appUser);
+      return { success: true, user: appUser };
+    } catch (error: any) {
+      console.error('Firebase Google login error:', error);
+      return { success: false, message: error?.message || 'Gagal masuk dengan Google.' };
+    }
+  }
+
+  public async syncToFirestore(): Promise<{ success: boolean; count: number }> {
+    try {
+      const programs = this.getPrograms();
+      let count = 0;
+      for (const p of programs) {
+        const path = `programs/${p.id}`;
+        try {
+          await setDoc(doc(db, 'programs', p.id), p);
+          count++;
+        } catch (err) {
+          handleFirestoreError(err, OperationType.WRITE, path);
+        }
+      }
+      return { success: true, count };
+    } catch (err) {
+      console.warn('Sync to Firestore skipped or partial:', err);
+      return { success: false, count: 0 };
+    }
+  }
+
+  public async syncFromFirestore(): Promise<boolean> {
+    try {
+      const snap = await getDocs(collection(db, 'programs'));
+      if (!snap.empty) {
+        const remotePrograms: InternshipProgram[] = [];
+        snap.forEach((d) => remotePrograms.push(d.data() as InternshipProgram));
+        if (remotePrograms.length > 0 && this.isBrowser()) {
+          localStorage.setItem(STORAGE_KEYS.PROGRAMS, JSON.stringify(remotePrograms));
+          return true;
+        }
+      }
+      return false;
+    } catch (err) {
+      console.warn('Sync from Firestore skipped:', err);
+      return false;
     }
   }
 

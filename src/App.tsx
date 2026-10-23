@@ -17,6 +17,7 @@ import { ScheduleView } from './components/ScheduleView';
 import { AdminDashboard } from './components/AdminDashboard';
 import { SystemInfoModal } from './components/SystemInfoModal';
 import { storageService } from './services/storageService';
+import { testFirestoreConnection } from './services/firebase';
 import {
   User,
   StudentProfile,
@@ -94,6 +95,9 @@ export default function App() {
 
   useEffect(() => {
     refreshData();
+    testFirestoreConnection().catch((err) =>
+      console.warn('Initial Firestore connection check:', err)
+    );
   }, []);
 
   // Handle Login / Registration Success
